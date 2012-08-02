@@ -1,4 +1,5 @@
 Scripts
 =======
 
-Some sample scripts
+Some sample scripts. Just for learning something new ;-)
+
