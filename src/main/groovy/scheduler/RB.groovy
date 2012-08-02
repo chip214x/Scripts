@@ -17,6 +17,9 @@ public class RB extends RouteBuilder {
         this.scheduleString = scheduleString;
     }
 
+	/**
+	 * Create the Camel Routes
+	 */
 
     @Override
     public void configure() throws Exception {
