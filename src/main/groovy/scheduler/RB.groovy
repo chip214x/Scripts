@@ -21,6 +21,6 @@ public class RB extends RouteBuilder {
     @Override
     public void configure() throws Exception {
         def definition = from(scheduleString)
-        definition.process(new Processor1("This is my message input", "/tmp/scheduler/test").process(new Processor2()));
+        definition.process(new Processor1("This is my message input", "/home/sree/testhi.txt")).process(new Processor2("/home/sree/testhi.txt"));
     }
 }

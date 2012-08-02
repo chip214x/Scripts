@@ -12,11 +12,14 @@ import org.apache.camel.Exchange
  */
 class Processor2 implements Processor{
 
+    String fileName
+
+    Processor2(String fileName) {
+        this.fileName = fileName
+    }
 
     @Override
     void process(Exchange exchange) {
-
-        String fileName = exchange.getIn().getBody()
 
         new File(fileName).eachLine {
             println "Processor two reads data from file : -> "  + it

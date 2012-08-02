@@ -14,13 +14,16 @@ class MyMain {
 
     public static void main(String[] args){
 
-        String period = 1000L * 600
+        String period = 0
         String delay = 1000 * 1
-        String scheduleString = "timer:schedule?period=\$period&delay=\$delay&daemon=true"
+        String scheduleString = "timer:schedule?period=$period&delay=$delay&daemon=true"
         CamelContext context = new DefaultCamelContext();
         context.addRoutes(new RB(scheduleString));
 
         context.start();
+        while(true){
+
+        };
 
     }
 

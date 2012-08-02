@@ -8,7 +8,7 @@ import org.apache.camel.Exchange
  * @author: Sreejith S
  * @since: 8/2/12
  * Time: 12:21 PM
- * 
+ *
  */
 class Processor1 implements Processor{
 
@@ -17,15 +17,12 @@ class Processor1 implements Processor{
 
     Processor1(String mymessage, String fileName) {
         this.mymessage = mymessage
+        this.fileName = fileName
     }
 
     @Override
     void process(Exchange exchange) {
-        int i=0;
-        while(i<10){
-            new File(fileName).append("Processor1 writes message :" + mymessage + "  ->  ${i} ")
-        }
-
-        exchange.getOut(fileName)
+        File f = new File(fileName)
+        f.append("Processor1 writes message :" + mymessage )
     }
 }
