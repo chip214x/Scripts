@@ -1,0 +1,266 @@
+import org.apache.ivy.core.settings.IvySettings
+import org.apache.ivy.plugins.resolver.FileSystemResolver
+
+apply plugin: 'groovy'
+apply plugin: 'eclipse'
+apply plugin: 'code-quality'
+sourceCompatibility = 1.6
+
+group = 'Scripts'
+version="1.0.SNAPSHOT"
+
+contextFiles = []
+
+defaultTasks 'jar'
+
+File snaps = new File("${System.properties['user.home']}/.scripts")
+
+if (!snaps.exists())
+    snaps.mkdir()
+
+snapshots = "${System.properties['user.home']}/.scripts"
+
+manifest.mainAttributes(
+        'Implementation-Title': 'Scripts',
+        'Implementation-Product': 'Script Set',
+        'Implementation-Module': "${project.name}",
+        'Implementation-Version': version
+)
+
+configurations {
+    compile.visible = true
+    pmdConf
+    findbugsConf
+    checkstyleConf
+    pmd
+    coberturaRuntime {extendsFrom testRuntime}
+    emma
+    provided
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    mavenRepo urls: ["http://opennlp.sourceforge.net/maven2","https://repository.jboss.org/nexus/content/repositories/apache-incubator"]
+    add(new org.apache.ivy.plugins.resolver.FileSystemResolver()) {
+        name = 'snapshotsRepository'
+        validate = true
+        descriptor = 'required'
+        changingPattern = ".*SNAPSHOT.*"
+        addIvyPattern "$snapshots/[organisation]/[module]/ivy-[revision].xml"
+        addArtifactPattern "$snapshots/[organisation]/[module]/[type]s/[artifact]-[revision].[ext]"
+        checkmodified = true
+    }
+
+}
+
+uploadArchives {
+    doFirst{
+        genlib()
+    }
+    repositories { add project.repositories.snapshotsRepository }
+}
+
+dependencies {
+    groovy "org.codehaus.groovy:groovy:1.8.6"
+    compile "org.apache.activemq:activemq-core:4.1.1"
+    compile "org.apache.activemq:activeio-core:3.0.0-incubator"
+    compile "org.apache.camel:camel-core:2.6.0"
+    compile "org.apache.camel:camel-jms:1.0.0"
+
+    testRuntime group: 'net.sourceforge.cobertura', name: 'cobertura', version: '1.9.4.1'
+    pmdConf 'pmd:pmd:4.2.5'
+    checkstyleConf 'checkstyle:checkstyle:5.0'
+    pmd group: 'pmd', name: 'pmd', version: '4.2.5'
+}
+
+jar {
+    contextFiles.each {
+        exclude(it)
+    }
+}
+
+orderEntryType = 'module-library'
+gradleLibraryId = 'Gradle Libraries'
+
+task idea << {
+
+    // change this to the name of your module file
+    def moduleFileName = "Scripts.iml"
+    def root = new XmlParser().parse(moduleFileName)
+    def newModuleRootManager = root.component.find {it.'@name' == 'NewModuleRootManager'}
+
+    // if there is already a module library in place we should remove it
+    removeOldOrderEntry(newModuleRootManager)
+
+    // add the new module library with our current gradle dependencies
+    addNewOrderEntry(newModuleRootManager)
+
+    // output the .iml XML
+    def writer = new StringWriter()
+    new XmlNodePrinter(new PrintWriter(writer)).print(root)
+    def result = writer.toString()
+    print result
+
+    // overwrite our old .iml file
+    def moduleFile = new File(moduleFileName)
+    moduleFile.text = result
+}
+
+private def addNewOrderEntry(newModuleRootManager) {
+    def newOrderEntry = newModuleRootManager.appendNode('orderEntry', [type: orderEntryType])
+    def newGradleLibrary = newOrderEntry.appendNode('library', [name: gradleLibraryId])
+    def classesNode = newGradleLibrary.appendNode('CLASSES')
+
+    def path = configurations.compile.asPath
+    def jars = path.split(':')
+    jars = Arrays.asList(jars)
+
+    jars.each { jar ->
+
+        classesNode.appendNode('root', [url: "jar://$jar!/"])
+    }
+}
+
+private def removeOldOrderEntry(newModuleRootManager) {
+    def oldOrderEntry = newModuleRootManager.orderEntry.find {
+        (it.'@type' == orderEntryType) && (it.library[0].'@name' == gradleLibraryId)
+    }
+    if (oldOrderEntry) {
+        newModuleRootManager.remove(oldOrderEntry)
+    }
+}
+
+
+private org.apache.ivy.plugins.resolver.DependencyResolver ivyResolver() {
+    def snapshotResolver = new FileSystemResolver();
+    snapshotResolver.name = "snapshotsRepository"
+    snapshotResolver.changingPattern = ".*SNAPSHOT*"
+    snapshotResolver.checkmodified = true
+    snapshotResolver.addIvyPattern "${snapshots}/[organisation]/[module]/ivy-[revision].xml"
+    snapshotResolver.addArtifactPattern "${snapshots}/[organisation]/[module]/[type]s/[artifact]-[revision].[ext]"
+
+    def ivySettings = new IvySettings()
+    ivySettings.defaultInit()
+    snapshotResolver.settings = ivySettings
+    return snapshotResolver
+}
+
+task cleanGradle << {
+    def dir = new File("${System.properties['user.home']}/.gradle/cache/${project.group}/${project.name}")
+    dir.deleteDir()
+    println "Cleaned gradle cache Directory $dir"
+}
+
+task cleanIvy << {
+    println "Cleaning ivy files"
+    def ivy = new File("${System.properties['user.home']}/.ivy2/cache/${project.group}/${project.name}")
+    assert ivy.deleteDir()
+    ivy = new File("${System.properties['user.home']}/.grails/ivy-cache/${project.group}/${project.name}")
+    assert ivy.deleteDir()
+    println "Cleaned Ivy directory $ivy"
+}
+
+task cleanSnapshots << {
+    def snapshotsDir = new File("${snapshots}/${project.group}/${project.name}")
+    snapshotsDir.deleteDir()
+    println "Cleaned $snapshotsDir"
+}
+
+task cleanAll << {
+}
+
+cleanAll.dependsOn clean, cleanGradle, cleanIvy, cleanSnapshots
+
+task pmd << {
+    println 'Running PMD static code analysis'
+    ant {
+        taskdef(name:'pmd', classname:'net.sourceforge.pmd.ant.PMDTask', classpath: configurations.pmdConf.asPath)
+        println "$buildDir, $projectDir"
+        mkdir dir: "$buildDir/pmd-reports"
+        pmd(shortFilenames:'true', failonruleviolation:'false', rulesetfiles:"$projectDir/codequality/pmd-rules.xml") {
+
+
+            formatter(type:'xml', toConsole:'true', tofile:"$buildDir/pmd-reports/pmdreport.xml")
+            fileset(dir: "src/main") {
+                include(name: '**/*.java')
+            }
+            fileset(dir: "src/test") {
+                include(name: '**/*.java')
+            }
+        }
+    }
+}
+
+
+
+task checkstyle << {
+    println 'Running checkstyle tool'
+    ant{
+        mkdir dir:"$buildDir/Checkstyle-reports"
+
+        taskdef(resource: 'checkstyletask.properties', classpath: configurations.checkstyleConf.asPath)
+        checkstyle(failOnViolation:'false', config: 'codequality/sun_checks.xml') {
+            formatter(type:'xml', tofile:"$buildDir/Checkstyle-reports/checkstylereport.xml")
+            fileset(dir: 'src'){
+                include(name: '**/*.java')
+            }
+        }
+        xslt(in: "$buildDir/Checkstyle-reports/checkstylereport.xml", out: "$buildDir/Checkstyle-reports/checkstyle_report.html", style: "codequality/checkstyle-noframes.xsl")
+    }
+}
+
+
+// To use findbugs you must have findbugs installed. Additionally you need a property called findbugsHome. You can define this
+// in ~/.gradle/gradle.properties
+
+task findbugs(dependsOn: tasks.withType(Jar).all) << {
+
+    /* Read environment variables. */
+    env = System.getenv()
+    findbugsHome = env['FINDBUGS_HOME']
+    if (findbugsHome == null) {
+        logger.warn("\nEnvironment variable FINDBUGS_HOME not set.")
+        System.exit(-1)
+    }
+
+    ant {
+        taskdef(name: "findbugs", classname: "edu.umd.cs.findbugs.anttask.FindBugsTask", classpath: "$findbugsHome/lib/findbugs-ant.jar")
+        mkdir dir: "$buildDir/findbugs-report"
+        findbugs(home: findbugsHome, output: "xml:withMessages", outputFile: "$buildDir/findbugs-report/grails-fb.xml", jvmargs: "-Xmx768M") {
+            auxClasspath() {
+                fileset(dir: "lib") {
+                    include(name: "*.jar")
+                    exclude(name: "jsp-api-2.1.jar")
+                }
+                fileset(dir: "${System.properties['JAVA_HOME']}/lib") {
+                    include(name: "tools.jar")
+                }
+            }
+            sourcePath path: file('src')
+            auxAnalyzepath() {
+                fileset dir: libsDir, includes: "grails-*.jar"
+            }
+        }
+        xslt(in: "$buildDir/findbugs-report/grails-fb.xml", out: "$buildDir/findbugs-report/grails-fb.html", style: "$findbugsHome/src/xsl/fancy.xsl")
+    }
+}
+
+def genlib() {
+    def excludeList = [ ]
+    println "generating the jar files for thescripts runtime build/runtimejars folder:" + project.buildDir + "/libs/" + project.name + "-" + project.version + ".jar"
+    def runtimejarsFolder = new File(project.buildDir, "runtimejars")
+    def pocJarDir = new File(project.buildDir, "libs/")
+    runtimejarsFolder.mkdir()
+    ant.delete{
+        fileset(dir:runtimejarsFolder, includes:"*.jar")
+    }
+
+    "${sourceSets.main.runtimeClasspath.asPath}".split(File.pathSeparator).each{
+        def filenamePos = it.lastIndexOf("/")
+        def filename = it.substring(filenamePos + 1);
+        if(it.endsWith('.jar') && !excludeList.contains(filename)){
+            ant.copy(todir: runtimejarsFolder.absolutePath , file: it)
+        }
+    }
+}
