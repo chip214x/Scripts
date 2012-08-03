@@ -11,19 +11,20 @@ import org.apache.camel.builder.RouteBuilder;
  */
 public class RB extends RouteBuilder {
 
-    String scheduleString;
+	String scheduleString;
 
-    RB(String scheduleString){
-        this.scheduleString = scheduleString;
-    }
+	RB(String scheduleString){
+		this.scheduleString = scheduleString;
+	}
 
 	/**
 	 * Create the Camel Routes
 	 */
 
-    @Override
-    public void configure() throws Exception {
-        def definition = from(scheduleString)
-        definition.process(new Processor1("This is my message input", "/home/sree/testhi.txt")).process(new Processor2("/home/sree/testhi.txt"));
-    }
+	@Override
+	public void configure() throws Exception {
+		def definition = from(scheduleString)
+		definition.routePolicy(new Policy())
+		definition.process(new Processor1("This is my message input", "/home/sree/testhi.txt")).process(new Processor2("/home/sree/testhi.txt"));
+	}
 }
